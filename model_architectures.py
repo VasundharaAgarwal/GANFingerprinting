@@ -139,3 +139,26 @@ class Discriminator3(nn.Module):
       x = self.dropout2(self.leakyReLU2(x))
       x = self.sigmoid(self.linear(self.flatten(x)))
       return x
+      
+class Autoencoder(nn.Module):
+    def __init__(self):
+        super(Autoencoder, self).__init__()
+        
+        #encoder 
+        self.conv1 = nn.Conv2d(1, 16, 3, padding=1)
+        self.conv2 = nn.Conv2d(16, 4, 3, padding=1)
+        self.maxPool = nn.MaxPool2d(2, 2)  
+       
+        # decoder 
+        self.convTr1 = nn.ConvTranspose2d(4, 16, 2, stride=2)
+        self.convTr2 = nn.ConvTranspose2d(16, 1, 2, stride=2)
+
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        x = self.maxPool(x)
+        x = F.relu(self.conv2(x))
+        x = self.maxPool(x)  
+        x = F.relu(self.convTr1(x))
+        x = F.sigmoid(self.convTr2(x))
+                
+        return x
