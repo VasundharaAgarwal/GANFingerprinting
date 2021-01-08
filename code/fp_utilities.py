@@ -1,12 +1,14 @@
 import numpy as np
-import sys
 import matplotlib.pyplot as plt
+import random
+import torch
 from sklearn.metrics import precision_recall_fscore_support
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import confusion_matrix 
 from sklearn.metrics import ConfusionMatrixDisplay
 from mpl_toolkits.axes_grid1 import ImageGrid
 import model_architectures as ma
+import cv2
 
 labels = ['real', 'GAN 1', 'GAN 2', 'GAN 3']
 ground_truth = (['real']*1000) + (['GAN 1']*1000) + (['GAN 2']*1000) + (['GAN 3']*1000)
@@ -73,8 +75,15 @@ def plot_corr_histograms(fp_extraction_method):
     ax[i].hist(coefs_gan_3, color='green', alpha = 0.2, label="GAN 3")
     ax[i].set_xlabel('Correlation')
   plt.legend()
-  
-def get_predictions(fp_extraction_method, denoising_method="median blur"):
+
+
+def preprocess_adv1(test_imgs, fps, gan_num):
+	fps = [fp.reshape(28,28) for fp in fps]
+	test_imgs_attacked = [np.float32(test_img + fps[(gan_num+1)%4]) for test_img in test_imgs]
+	return test_imgs_attacked
+
+
+def get_predictions(fp_extraction_method, denoising_method="median blur", attack_mode="none"):
   labels = ['real', 'GAN 1', 'GAN 2', 'GAN 3']
   preds = []
   fp_list = load_fingerprints(fp_extraction_method, denoising_method)
@@ -85,6 +94,8 @@ def get_predictions(fp_extraction_method, denoising_method="median blur"):
   for gan_num in range(4):
     file_name_load = "GAN_{:d}_images.npy".format(gan_num) if gan_num > 0 else "Real_images.npy"
     fake_test = np.load('/content/gdrive/My Drive/Diss/Images_Testing/'+file_name_load)
+    if(attack_mode == 'adv1'):
+    	fake_test = preprocess_adv1(fake_test, fp_list, gan_num)
     for i in range(1000):
       img = fake_test[i]
       if (fp_extraction_method == 'Marra'):
