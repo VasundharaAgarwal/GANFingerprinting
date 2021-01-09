@@ -36,7 +36,7 @@ def load_fingerprints(fp_extraction_method, denoising_method="median blur"):
   fingerprints = [np.load(dir + f + '.npy').flatten() for f in file_names ]
   return fingerprints
   
-def compute_corr_coeff(gan_num, fp_extraction_method, denoising_method="median blur"):
+def compute_corr_coeff(gan_num, fp_extraction_method, attack_mode, denoising_method="median blur"):
   coefs_list = [[],[],[],[]]
   file_name_load = "GAN_{:d}_images.npy".format(gan_num) if gan_num > 0 else "Real_images.npy"
   fake_test = np.load('/content/gdrive/My Drive/Diss/Images_Testing/'+file_name_load)
@@ -45,6 +45,8 @@ def compute_corr_coeff(gan_num, fp_extraction_method, denoising_method="median b
     autoEnc = ma.Autoencoder()
     model_dict = torch.load('/content/gdrive/My Drive/Diss/trained_models/Autoencoder', map_location=torch.device('cpu'))
     autoEnc.load_state_dict(model_dict['model_state_dict'])
+  if(attack_mode == 'adv1'):
+    fake_test = preprocess_adv1(fake_test, fp_list, gan_num)
   for i in range(1000):
     img = fake_test[i]
     if (fp_extraction_method == 'Marra'):
@@ -61,14 +63,14 @@ def compute_corr_coeff(gan_num, fp_extraction_method, denoising_method="median b
       coefs_list[i].append(np.corrcoef(fp_list[i], residual)[0][1]) 
   return coefs_list
   
-def plot_corr_histograms(fp_extraction_method):
+def plot_corr_histograms(fp_extraction_method, attack_mode='none'):
   plt.rcParams['axes.labelsize'] =  16
   plt.rcParams['legend.fontsize']  =  12
   plt.rcParams['xtick.labelsize'] = 14
   plt.rcParams['ytick.labelsize'] = 14   
   fig, ax = plt.subplots(1,4,figsize=(16,5), sharex=True, sharey=True)
   for i in range(4):
-    coefs_real, coefs_gan_1, coefs_gan_2, coefs_gan_3 = compute_corr_coeff(i, fp_extraction_method)
+    coefs_real, coefs_gan_1, coefs_gan_2, coefs_gan_3 = compute_corr_coeff(i, fp_extraction_method, attack_mode)
     ax[i].hist(coefs_real, color='red', alpha= 0.25, label="real")
     ax[i].hist(coefs_gan_1, color='blue', alpha = 0.2, label="GAN 1")
     ax[i].hist(coefs_gan_2, color='yellow', alpha = 0.2, label="GAN 2")
