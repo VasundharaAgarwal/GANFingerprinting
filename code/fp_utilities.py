@@ -13,6 +13,7 @@ import cv2
 labels = ['real', 'GAN 1', 'GAN 2', 'GAN 3']
 ground_truth = (['real']*1000) + (['GAN 1']*1000) + (['GAN 2']*1000) + (['GAN 3']*1000)
 
+
 def generate_test_batch():
   manualSeed = 500
   torch.manual_seed(manualSeed)
@@ -35,20 +36,25 @@ def load_fingerprints(fp_extraction_method, denoising_method="median blur"):
     file_names = [f + '_' + denoising_method.replace(" ", "_") for f in file_names]
   fingerprints = [np.load(dir + f + '.npy').flatten() for f in file_names ]
   return fingerprints
+
+def load_test_images(gan_num):
+  file_name_load = "GAN_{:d}_images.npy".format(gan_num) if gan_num > 0 else "Real_images.npy"
+  test_imgs = np.load('/content/gdrive/My Drive/Diss/Images_Testing/'+file_name_load)
+  return test_imgs
+  
   
 def compute_corr_coeff(gan_num, fp_extraction_method, attack_mode, denoising_method="median blur"):
   coefs_list = [[],[],[],[]]
-  file_name_load = "GAN_{:d}_images.npy".format(gan_num) if gan_num > 0 else "Real_images.npy"
-  fake_test = np.load('/content/gdrive/My Drive/Diss/Images_Testing/'+file_name_load)
+  test_imgs = load_test_imgs(gan_num)
   fp_list = load_fingerprints(fp_extraction_method, denoising_method)
   if(fp_extraction_method == 'Yu'):
     autoEnc = ma.Autoencoder()
     model_dict = torch.load('/content/gdrive/My Drive/Diss/trained_models/Autoencoder', map_location=torch.device('cpu'))
     autoEnc.load_state_dict(model_dict['model_state_dict'])
   if(attack_mode == 'adv1'):
-    fake_test = preprocess_adv1(fake_test, fp_list, gan_num)
+    test_imgs = preprocess_adv1(test_imgs, fp_list, gan_num)
   for i in range(1000):
-    img = fake_test[i]
+    img = test_imgs[i]
     if (fp_extraction_method == 'Marra'):
       if (denoising_method == "median blur"):
         dst = cv2.medianBlur(img, 3)
@@ -78,14 +84,25 @@ def plot_corr_histograms(fp_extraction_method, attack_mode='none'):
     ax[i].set_xlabel('Correlation')
   plt.legend()
 
+def get_avg_l2_norm_test_img():
+  sum_l2_norms = 0
+  for gan_num in range(4):
+    test_imgs = load_test_images(gan_num)
+    sum_l2_norms += np.sum([np.linalg.norm(img) for img in test_imgs])
+  avg_l2_norm = sum_l2_norms/4000
+  return avg_l2_norm
 
-def preprocess_adv1(test_imgs, fps, gan_num):
+avg_l2_norm_imgs = get_avg_l2_norm_test_img()
+
+def preprocess_adv1(test_imgs, fps, gan_num, attack_strength):
 	fps = [fp.reshape(28,28) for fp in fps]
-	test_imgs_attacked = [np.float32(test_img + fps[(gan_num+1)%4]) for test_img in test_imgs]
+	avg_l2_norm_fps = np.average([np.linalg.norm(fp) for fp in fps])
+	div_factor = avg_l2_norm_fps/(avg_l2_norm_imgs * attack_strength)
+	fps_scaled = [fp/div_factor for fp in fps]
+	test_imgs_attacked = [np.float32(test_img + fps_scaled[(gan_num+1)%4]) for test_img in test_imgs]
 	return test_imgs_attacked
-
-
-def get_predictions(fp_extraction_method, denoising_method="median blur", attack_mode="none"):
+    
+def get_predictions(fp_extraction_method, denoising_method="median blur", attack_mode="none", attack_strength=0):
   labels = ['real', 'GAN 1', 'GAN 2', 'GAN 3']
   preds = []
   fp_list = load_fingerprints(fp_extraction_method, denoising_method)
@@ -94,12 +111,11 @@ def get_predictions(fp_extraction_method, denoising_method="median blur", attack
     model_dict = torch.load('/content/gdrive/My Drive/Diss/trained_models/Autoencoder', map_location=torch.device('cpu'))
     autoEnc.load_state_dict(model_dict['model_state_dict'])
   for gan_num in range(4):
-    file_name_load = "GAN_{:d}_images.npy".format(gan_num) if gan_num > 0 else "Real_images.npy"
-    fake_test = np.load('/content/gdrive/My Drive/Diss/Images_Testing/'+file_name_load)
+    test_imgs = load_test_images(gan_num)
     if(attack_mode == 'adv1'):
-    	fake_test = preprocess_adv1(fake_test, fp_list, gan_num)
+    	test_imgs = preprocess_adv1(test_imgs, fp_list, gan_num, attack_strength)
     for i in range(1000):
-      img = fake_test[i]
+      img = test_imgs[i]
       if (fp_extraction_method == 'Marra'):
         if (denoising_method == "median blur"):
           dst = cv2.medianBlur(img, 3)
